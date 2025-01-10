@@ -1,5 +1,6 @@
 import pygame, time
 from random import randint
+import numpy as np
 
 class GridPoint:
     def __init__(self, x, y):
@@ -16,13 +17,15 @@ DOWN = "D"
 LEFT = "L"
 RIGHT = "R"
 
+ACTIONS = [UP, DOWN, LEFT, RIGHT]  # Действия, которые может предпринимать змея
+
 pygame.init()
 game_screen = pygame.display.set_mode((AREA.x, AREA.y))
 continue_game = True
 
 snake_head = pygame.sprite.Sprite()
 snake_head.tail = []
-snake_head.image = pygame.image.load("images/snake_seg.gif")  # TODO get a snake image
+snake_head.image = pygame.image.load("images/snake_seg.gif")
 snake_head.rect = snake_head.image.get_rect()
 snake_group = pygame.sprite.GroupSingle(snake_head)
 
@@ -32,15 +35,32 @@ apple.image = pygame.image.load("images/apple.gif")
 apple.rect = apple.image.get_rect()
 apple_group = pygame.sprite.GroupSingle(apple)
 
-# TODO make sure game screen is divisible by the STEP_SIZE
-if snake_head.rect.width != apple.rect.width and snake_head.rect.height != apple.rect.height:
-    print("ERROR: Sprites are not a common size")
-elif snake_head.rect.width != snake_head.rect.height:
-    print("ERROR: Snake sprite is not square")
-elif apple.rect.width != apple.rect.height:
-    print("ERROR: Apple sprite is not square")
-else:
-    STEP_SIZE = snake_head.rect.width
+# Q-Learning параметры
+Q_table = {}  # Храним Q-значения для каждого состояния
+learning_rate = 0.1  # Коэффициент обучения
+discount_factor = 0.9  # Коэффициент дисконтирования
+epsilon = 0.1  # Вероятность выбора случайного действия
+
+def get_state(snake, apple):
+    """Возвращаем состояние как кортеж из положения головы змеи и положения яблока"""
+    return (snake.rect.left // STEP_SIZE, snake.rect.top // STEP_SIZE, apple.rect.left // STEP_SIZE, apple.rect.top // STEP_SIZE)
+
+def initialize_Q(state):
+    """Инициализируем Q-таблицу для нового состояния"""
+    if state not in Q_table:
+        Q_table[state] = {action: 0.0 for action in ACTIONS}
+
+def choose_action(state):
+    """Выбор действия на основе ε-жадности"""
+    if np.random.rand() < epsilon:
+        return np.random.choice(ACTIONS)  # Случайное действие
+    else:
+        return max(Q_table[state], key=Q_table[state].get)  # Действие с наибольшим Q-значением
+
+def update_Q(state, action, reward, next_state):
+    """Обновляем Q-таблицу по формуле Q-learning"""
+    next_max = max(Q_table[next_state].values()) if next_state in Q_table else 0
+    Q_table[state][action] += learning_rate * (reward + discount_factor * next_max - Q_table[state][action])
 
 def isExitGameEvent(event):
     return event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE)
@@ -81,34 +101,9 @@ def handleEvents():
             elif event.key in (pygame.K_RIGHT, pygame.K_d):  # Вправо
                 if snake_head.direction != LEFT:
                     snake_head.direction = RIGHT
-            elif event.key == pygame.K_p:
-                print("P Pressed")
-        elif event.type == pygame.KEYUP:
-            pass
-
-    for event in pygame.event.get():
-        if isExitGameEvent(event):
-            return False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                snake_head.direction = UP
-            if event.key == pygame.K_DOWN:
-                snake_head.direction = DOWN
-            if event.key == pygame.K_LEFT:
-                snake_head.direction = LEFT
-            if event.key == pygame.K_RIGHT:
-                snake_head.direction = RIGHT
-            if event.key == pygame.K_p:
-                print("P Pressed")
         elif event.type == pygame.KEYUP:
             pass
     return True
-
-def waitForKeyPress():
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                return
 
 def createApples():
     if not apple.live:
@@ -136,16 +131,29 @@ def snakeIsTangled(snake):
     return False
 
 def updateSnake():
-    """Update snake and tail positions, return False if snake is tangled"""
+    """Обновление змеи с использованием Q-learning"""
+    state = get_state(snake_head, apple)
+    initialize_Q(state)  # Инициализация Q-таблицы для текущего состояния
+    action = choose_action(state)  # Выбор действия с использованием Q-learning
+    snake_head.direction = action  # Выполнение выбранного действия
+    
     snake_head.tail.append(GridPoint(snake_head.rect.left, snake_head.rect.top))
     moveSprite(snake_head)
+    
+    reward = 0  # Начальная награда
+    
     if eatAvailiableApples(snake_head):
         clearApples()
-        # Don't clip tail, which effectively grows the tail by one
+        reward = 10  # Награда за поедание яблока
     elif snakeIsTangled(snake_head):
+        reward = -10  # Штраф за столкновение с собой
         return False
     else:
         snake_head.tail.pop(0)
+
+    next_state = get_state(snake_head, apple)
+    initialize_Q(next_state)
+    update_Q(state, action, reward, next_state)  # Обновление Q-таблицы
 
     return True
 
@@ -169,28 +177,42 @@ def printEndOfGameSummary(game_screen, score):
     printText(game_screen, "Score: {}".format(score), 200, 30)
     pygame.display.update()
     waitForKeyPress()
-    waitForKeyPress()
 
-snake_head.direction = DOWN
-game_speed_modifier = SPEED_DELAY
-while continue_game:
-    game_speed_modifier = SPEED_DELAY  # Keep the speed constant
-    time.sleep(game_speed_modifier)
-    continue_game = handleEvents()
-    continue_game = updateSnake()
+def waitForKeyPress():
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                return
 
-    game_screen.fill(BG_COLOR)
-    printText(game_screen, "{}".format(len(snake_head.tail)), 10, 30, (100, 100, 100))
+def run_game(player_mode=True):
+    snake_head.direction = DOWN
+    game_speed_modifier = SPEED_DELAY
+    while continue_game:
+        game_speed_modifier = SPEED_DELAY  # Keep the speed constant
+        time.sleep(game_speed_modifier)
+        if player_mode:
+            continue_game = handleEvents()  # Режим игрока
+        else:
+            continue_game = updateSnake()  # Режим бота
 
-    drawSnake()
+        game_screen.fill(BG_COLOR)
+        printText(game_screen, "{}".format(len(snake_head.tail)), 10, 30, (100, 100, 100))
 
-    createApples()
-    apple_group.draw(game_screen)
+        drawSnake()
 
-    pygame.display.update()
+        createApples()
+        apple_group.draw(game_screen)
 
-print("Score: {}".format(len(snake_head.tail)))
+        pygame.display.update()
 
-printEndOfGameSummary(game_screen, len(snake_head.tail) - 1)
+    print("Score: {}".format(len(snake_head.tail)))
+    printEndOfGameSummary(game_screen, len(snake_head.tail) - 1)
+
+# Выбираем режим игры
+mode = input("Выберите режим (игрок/бот): ").strip().lower()
+if mode == "бот":
+    run_game(player_mode=False)  # Режим бота
+else:
+    run_game(player_mode=True)  # Режим игрока
 
 pygame.quit()
