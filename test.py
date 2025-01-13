@@ -1,218 +1,245 @@
-import pygame, time
-from random import randint
-import numpy as np
+import pygame
+import sys
+import random
 
-class GridPoint:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-AREA = GridPoint(640, 480)
-SPEED_DELAY = 0.1
-STEP_SIZE = 20  # Needs to be the same as sprite size
-BG_COLOR = (0, 0, 0)
-
-UP = "U"
-DOWN = "D"
-LEFT = "L"
-RIGHT = "R"
-
-ACTIONS = [UP, DOWN, LEFT, RIGHT]  # Действия, которые может предпринимать змея
-
+# Initialize PyGame
 pygame.init()
-game_screen = pygame.display.set_mode((AREA.x, AREA.y))
-continue_game = True
 
-snake_head = pygame.sprite.Sprite()
-snake_head.tail = []
-snake_head.image = pygame.image.load("images/snake_seg.gif")
-snake_head.rect = snake_head.image.get_rect()
-snake_group = pygame.sprite.GroupSingle(snake_head)
+# Set up the game window
+screen_width = 1920
+screen_height = 1080
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("Simple Shooter Game")
 
-apple = pygame.sprite.Sprite()
-apple.live = False
-apple.image = pygame.image.load("images/apple.gif")
-apple.rect = apple.image.get_rect()
-apple_group = pygame.sprite.GroupSingle(apple)
+# Set the frame rate
+clock = pygame.time.Clock()
 
-# Q-Learning параметры
-Q_table = {}  # Храним Q-значения для каждого состояния
-learning_rate = 0.1  # Коэффициент обучения
-discount_factor = 0.9  # Коэффициент дисконтирования
-epsilon = 0.1  # Вероятность выбора случайного действия
+# Colors
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+BLACK = (0, 0, 0)
+GRAY = (100, 100, 100)
 
-def get_state(snake, apple):
-    """Возвращаем состояние как кортеж из положения головы змеи и положения яблока"""
-    return (snake.rect.left // STEP_SIZE, snake.rect.top // STEP_SIZE, apple.rect.left // STEP_SIZE, apple.rect.top // STEP_SIZE)
+# Fonts
+font = pygame.font.SysFont("Arial", 30)
+large_font = pygame.font.SysFont("Arial", 60)
 
-def initialize_Q(state):
-    """Инициализируем Q-таблицу для нового состояния"""
-    if state not in Q_table:
-        Q_table[state] = {action: 0.0 for action in ACTIONS}
+# Player settings
+player_width = 120
+player_height = 140
+player_speed = 5
+player_hp = 3  # Player health
 
-def choose_action(state):
-    """Выбор действия на основе ε-жадности"""
-    if np.random.rand() < epsilon:
-        return np.random.choice(ACTIONS)  # Случайное действие
+# Bullet settings
+bullet_width = 40
+bullet_height = 80
+bullet_speed = 7
+bullets = []
+
+# Enemy settings
+enemy_width = 120
+enemy_height = 140
+enemy_speed = 2
+enemies = []
+enemy_bullets = []
+enemy_bullet_width = 40
+enemy_bullet_height = 80
+enemy_bullet_speed = 4
+enemy_min_fire_rate = 1000
+enemy_max_fire_rate = 3000
+
+# Enemy spawn
+enemy_timer = 0
+enemy_spawn_time = 2000
+
+# Score settings
+score = 0
+
+# Load player, enemy, and bullet sprites
+player_sprite = pygame.image.load('images/player_sprite.png')
+enemy_sprite = pygame.image.load('images/enemy_sprite.png')
+bullet_sprite = pygame.image.load('images/bullet_sprite.png')
+enemy_bullet_sprite = pygame.image.load('images/enemy_bullet_sprite.png')
+
+# Resize sprites
+player_sprite = pygame.transform.scale(player_sprite, (player_width, player_height))
+enemy_sprite = pygame.transform.scale(enemy_sprite, (enemy_width, enemy_height))
+bullet_sprite = pygame.transform.scale(bullet_sprite, (bullet_width, bullet_height))
+enemy_bullet_sprite = pygame.transform.scale(enemy_bullet_sprite, (enemy_bullet_width, enemy_bullet_height))
+
+
+# Collision detection function
+def check_collision(rect1, rect2):
+    return pygame.Rect(rect1).colliderect(pygame.Rect(rect2))
+
+
+# Button function
+def draw_button(text, x, y, width, height, inactive_color, active_color, action=None):
+    mouse = pygame.mouse.get_pos()
+    click = pygame.mouse.get_pressed()
+
+    # Check if the mouse is over the button
+    if x + width > mouse[0] > x and y + height > mouse[1] > y:
+        pygame.draw.rect(screen, active_color, (x, y, width, height))
+        if click[0] == 1 and action:
+            action()
     else:
-        return max(Q_table[state], key=Q_table[state].get)  # Действие с наибольшим Q-значением
+        pygame.draw.rect(screen, inactive_color, (x, y, width, height))
 
-def update_Q(state, action, reward, next_state):
-    """Обновляем Q-таблицу по формуле Q-learning"""
-    next_max = max(Q_table[next_state].values()) if next_state in Q_table else 0
-    Q_table[state][action] += learning_rate * (reward + discount_factor * next_max - Q_table[state][action])
+    # Draw text on the button
+    button_text = font.render(text, True, WHITE)
+    text_rect = button_text.get_rect(center=(x + width // 2, y + height // 2))
+    screen.blit(button_text, text_rect)
 
-def isExitGameEvent(event):
-    return event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE)
 
-def moveSprite(sprite):
-    if sprite.direction == UP:
-        sprite.rect.top -= STEP_SIZE
-    elif sprite.direction == DOWN:
-        sprite.rect.top += STEP_SIZE
-    elif sprite.direction == LEFT:
-        sprite.rect.left -= STEP_SIZE
-    elif sprite.direction == RIGHT:
-        sprite.rect.left += STEP_SIZE
+# Game over menu
+def game_over_menu():
+    while True:
+        screen.fill(BLACK)
+        game_over_text = large_font.render("Game Over", True, RED)
+        screen.blit(game_over_text, (screen_width // 2 - game_over_text.get_width() // 2, 200))
 
-    if sprite.rect.left < 0:
-        sprite.rect.left = 0
-    if sprite.rect.top < 0:
-        sprite.rect.top = 0
-    if sprite.rect.bottom > AREA.y:
-        sprite.rect.bottom = AREA.y
-    if sprite.rect.right > AREA.x:
-        sprite.rect.right = AREA.x
+        # Draw buttons
+        draw_button("Retry", screen_width // 2 - 150, 400, 300, 80, GRAY, RED, restart_game)
+        draw_button("Quit", screen_width // 2 - 150, 500, 300, 80, GRAY, RED, quit_game)
 
-def handleEvents():
-    for event in pygame.event.get():
-        if isExitGameEvent(event):
-            return False
-        elif event.type == pygame.KEYDOWN:
-            if event.key in (pygame.K_UP, pygame.K_w):  # Вверх
-                if snake_head.direction != DOWN:  # Исключение обратного хода
-                    snake_head.direction = UP
-            elif event.key in (pygame.K_DOWN, pygame.K_s):  # Вниз
-                if snake_head.direction != UP:
-                    snake_head.direction = DOWN
-            elif event.key in (pygame.K_LEFT, pygame.K_a):  # Влево
-                if snake_head.direction != RIGHT:
-                    snake_head.direction = LEFT
-            elif event.key in (pygame.K_RIGHT, pygame.K_d):  # Вправо
-                if snake_head.direction != LEFT:
-                    snake_head.direction = RIGHT
-        elif event.type == pygame.KEYUP:
-            pass
-    return True
+        pygame.display.flip()
+        clock.tick(60)
 
-def createApples():
-    if not apple.live:
-        apple.rect.top = randint(0, AREA.y - STEP_SIZE) 
-        apple.rect.top -= apple.rect.top % STEP_SIZE
-        apple.rect.left = randint(0, AREA.x - STEP_SIZE) 
-        apple.rect.left -= apple.rect.left % STEP_SIZE
-        apple.live = True
 
-def clearApples():
-    apple.live = False
+# Restart game
+def restart_game():
+    global player_hp, score, enemies, bullets, enemy_bullets
+    player_hp = 3
+    score = 0
+    enemies = []
+    bullets = []
+    enemy_bullets = []
+    main_game()
 
-def eatAvailiableApples(eater):
-    if (eater.rect.left == apple.rect.left) & (eater.rect.top == apple.rect.top):
-        return True
-    else:
-        return False
 
-def snakeIsTangled(snake):
-    y = snake.rect.top
-    x = snake.rect.left
-    for tailSeg in snake.tail:
-        if y == tailSeg.y and x == tailSeg.x:
-            return True
-    return False
+# Quit game
+def quit_game():
+    pygame.quit()
+    sys.exit()
 
-def updateSnake():
-    """Обновление змеи с использованием Q-learning"""
-    state = get_state(snake_head, apple)
-    initialize_Q(state)  # Инициализация Q-таблицы для текущего состояния
-    action = choose_action(state)  # Выбор действия с использованием Q-learning
-    snake_head.direction = action  # Выполнение выбранного действия
-    
-    snake_head.tail.append(GridPoint(snake_head.rect.left, snake_head.rect.top))
-    moveSprite(snake_head)
-    
-    reward = 0  # Начальная награда
-    
-    if eatAvailiableApples(snake_head):
-        clearApples()
-        reward = 10  # Награда за поедание яблока
-    elif snakeIsTangled(snake_head):
-        reward = -10  # Штраф за столкновение с собой
-        return False
-    else:
-        snake_head.tail.pop(0)
 
-    next_state = get_state(snake_head, apple)
-    initialize_Q(next_state)
-    update_Q(state, action, reward, next_state)  # Обновление Q-таблицы
+# Main game
+def main_game():
+    global player_hp, score, enemies, bullets, enemy_bullets, enemy_timer
 
-    return True
+    player_x = screen_width // 2 - player_width // 2
+    player_y = screen_height - player_height - 10
 
-def drawSnake():
-    halfStep = STEP_SIZE / 2
-    snake_group.draw(game_screen)
-    for tailSeg in snake_head.tail:
-        pygame.draw.circle(game_screen, (10, 200, 10), (tailSeg.x + halfStep, tailSeg.y + halfStep), STEP_SIZE / 3, 2)
-
-def printText(game_screen, text, yLoc, size, color=(255, 255, 255)):
-    gameFont = pygame.font.Font(None, size)
-    label = gameFont.render(text, 1, color)
-    lblHeight = label.get_rect().bottom - label.get_rect().top
-    lblWidth = label.get_rect().right - label.get_rect().left
-    game_screen.blit(label, (AREA.x / 2 - lblWidth / 2, yLoc))  # Centered
-
-def printEndOfGameSummary(game_screen, score):
-    game_screen.fill(BG_COLOR)
-    time.sleep(1)
-    printText(game_screen, "Game Over", 150, 35)
-    printText(game_screen, "Score: {}".format(score), 200, 30)
-    pygame.display.update()
-    waitForKeyPress()
-
-def waitForKeyPress():
     while True:
         for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.KEYDOWN:
-                return
+                if event.key == pygame.K_SPACE:
+                    bullet_x = player_x + player_width // 2 - bullet_width // 2
+                    bullet_y = player_y
+                    bullets.append([bullet_x, bullet_y])
 
-def run_game(player_mode=True):
-    snake_head.direction = DOWN
-    game_speed_modifier = SPEED_DELAY
-    while continue_game:
-        game_speed_modifier = SPEED_DELAY  # Keep the speed constant
-        time.sleep(game_speed_modifier)
-        if player_mode:
-            continue_game = handleEvents()  # Режим игрока
-        else:
-            continue_game = updateSnake()  # Режим бота
+        # Handle player movement
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and player_x > 0:
+            player_x -= player_speed
+        if keys[pygame.K_RIGHT] and player_x < screen_width - player_width:
+            player_x += player_speed
 
-        game_screen.fill(BG_COLOR)
-        printText(game_screen, "{}".format(len(snake_head.tail)), 10, 30, (100, 100, 100))
+        # Update bullet positions
+        for bullet in bullets:
+            bullet[1] -= bullet_speed
+        bullets = [bullet for bullet in bullets if bullet[1] > 0]
 
-        drawSnake()
+        # Update enemy positions and spawn new ones
+        current_time = pygame.time.get_ticks()
+        if current_time - enemy_timer > enemy_spawn_time:
+            enemy_x = random.randint(0, screen_width - enemy_width)
+            enemy_y = -enemy_height
+            enemies.append({
+                "x": enemy_x,
+                "y": enemy_y,
+                "hp": 1,
+                "last_shot": current_time,
+                "fire_rate": random.randint(enemy_min_fire_rate, enemy_max_fire_rate)
+            })
+            enemy_timer = current_time
 
-        createApples()
-        apple_group.draw(game_screen)
+        for enemy in enemies:
+            enemy["y"] += enemy_speed
 
-        pygame.display.update()
+            # Enemy shooting
+            if current_time - enemy["last_shot"] > enemy["fire_rate"]:
+                enemy_bullet_x = enemy["x"] + enemy_width // 2 - enemy_bullet_width // 2
+                enemy_bullet_y = enemy["y"] + enemy_height
+                enemy_bullets.append([enemy_bullet_x, enemy_bullet_y])
+                enemy["last_shot"] = current_time
+                enemy["fire_rate"] = random.randint(enemy_min_fire_rate, enemy_max_fire_rate)
 
-    print("Score: {}".format(len(snake_head.tail)))
-    printEndOfGameSummary(game_screen, len(snake_head.tail) - 1)
+        # Update enemy bullets
+        for enemy_bullet in enemy_bullets:
+            enemy_bullet[1] += enemy_bullet_speed
+        enemy_bullets = [bullet for bullet in enemy_bullets if bullet[1] < screen_height]
 
-# Выбираем режим игры
-mode = input("Выберите режим (игрок/бот): ").strip().lower()
-if mode == "бот":
-    run_game(player_mode=False)  # Режим бота
-else:
-    run_game(player_mode=True)  # Режим игрока
+        # Check collisions with player bullets
+        for bullet in bullets[:]:
+            for enemy in enemies[:]:
+                if check_collision((bullet[0], bullet[1], bullet_width, bullet_height),
+                                   (enemy["x"], enemy["y"], enemy_width, enemy_height)):
+                    bullets.remove(bullet)
+                    enemy["hp"] -= 1
+                    if enemy["hp"] <= 0:
+                        enemies.remove(enemy)
+                        score += 10
+                    break
 
-pygame.quit()
+        # Check collisions with player
+        for enemy_bullet in enemy_bullets[:]:
+            if check_collision((enemy_bullet[0], enemy_bullet[1], enemy_bullet_width, enemy_bullet_height),
+                               (player_x, player_y, player_width, player_height)):
+                enemy_bullets.remove(enemy_bullet)
+                player_hp -= 1
+                if player_hp <= 0:
+                    game_over_menu()
+
+        # Remove enemies that are off the screen
+        enemies = [enemy for enemy in enemies if enemy["y"] < screen_height]
+
+        # Fill the screen with black
+        screen.fill(BLACK)
+
+        # Draw the player
+        screen.blit(player_sprite, (player_x, player_y))
+
+        # Draw the bullets
+        for bullet in bullets:
+            screen.blit(bullet_sprite, (bullet[0], bullet[1]))
+
+        # Draw the enemies
+        for enemy in enemies:
+            screen.blit(enemy_sprite, (enemy["x"], enemy["y"]))
+
+        # Draw the enemy bullets
+        for enemy_bullet in enemy_bullets:
+            screen.blit(enemy_bullet_sprite, (enemy_bullet[0], enemy_bullet[1]))
+
+        # Display the score
+        score_text = font.render(f"Score: {score}", True, WHITE)
+        screen.blit(score_text, (10, 10))
+
+        # Display player HP
+        hp_text = font.render(f"HP: {player_hp}", True, RED)
+        screen.blit(hp_text, (10, 50))
+
+        # Update the display
+        pygame.display.flip()
+
+        # Cap the frame rate
+        clock.tick(60)
+
+
+# Start the game
+main_game()
