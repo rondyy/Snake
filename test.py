@@ -1,3 +1,4 @@
+from pickle import FALSE
 import pygame
 import sys
 import random
@@ -27,26 +28,26 @@ large_font = pygame.font.SysFont("Arial", 60)
 # Player settings
 player_width = 120
 player_height = 140
-player_speed = 5
-player_hp = 3  # Player health
+player_speed = 14
+player_hp = 1  # Player health
 
 # Bullet settings
 bullet_width = 40
 bullet_height = 80
-bullet_speed = 7
+bullet_speed = 20
 bullets = []
 
 # Enemy settings
-enemy_width = 120
+enemy_width = 140
 enemy_height = 140
 enemy_speed = 2
 enemies = []
 enemy_bullets = []
 enemy_bullet_width = 40
 enemy_bullet_height = 80
-enemy_bullet_speed = 4
+enemy_bullet_speed = 15
 enemy_min_fire_rate = 1000
-enemy_max_fire_rate = 3000
+enemy_max_fire_rate = 4000
 
 # Enemy spawn
 enemy_timer = 0
@@ -61,6 +62,10 @@ enemy_sprite = pygame.image.load('images/enemy_sprite.png')
 bullet_sprite = pygame.image.load('images/bullet_sprite.png')
 enemy_bullet_sprite = pygame.image.load('images/enemy_bullet_sprite.png')
 
+# Load the background image (you can replace 'images/background.png' with your image)
+background_image = pygame.image.load('images/background.png')
+background_image = pygame.transform.scale(background_image, (screen_width, screen_height))  # Resize it to fit the screen
+
 # Resize sprites
 player_sprite = pygame.transform.scale(player_sprite, (player_width, player_height))
 enemy_sprite = pygame.transform.scale(enemy_sprite, (enemy_width, enemy_height))
@@ -71,58 +76,6 @@ enemy_bullet_sprite = pygame.transform.scale(enemy_bullet_sprite, (enemy_bullet_
 # Collision detection function
 def check_collision(rect1, rect2):
     return pygame.Rect(rect1).colliderect(pygame.Rect(rect2))
-
-
-# Button function
-def draw_button(text, x, y, width, height, inactive_color, active_color, action=None):
-    mouse = pygame.mouse.get_pos()
-    click = pygame.mouse.get_pressed()
-
-    # Check if the mouse is over the button
-    if x + width > mouse[0] > x and y + height > mouse[1] > y:
-        pygame.draw.rect(screen, active_color, (x, y, width, height))
-        if click[0] == 1 and action:
-            action()
-    else:
-        pygame.draw.rect(screen, inactive_color, (x, y, width, height))
-
-    # Draw text on the button
-    button_text = font.render(text, True, WHITE)
-    text_rect = button_text.get_rect(center=(x + width // 2, y + height // 2))
-    screen.blit(button_text, text_rect)
-
-
-# Game over menu
-def game_over_menu():
-    while True:
-        screen.fill(BLACK)
-        game_over_text = large_font.render("Game Over", True, RED)
-        screen.blit(game_over_text, (screen_width // 2 - game_over_text.get_width() // 2, 200))
-
-        # Draw buttons
-        draw_button("Retry", screen_width // 2 - 150, 400, 300, 80, GRAY, RED, restart_game)
-        draw_button("Quit", screen_width // 2 - 150, 500, 300, 80, GRAY, RED, quit_game)
-
-        pygame.display.flip()
-        clock.tick(60)
-
-
-# Restart game
-def restart_game():
-    global player_hp, score, enemies, bullets, enemy_bullets
-    player_hp = 3
-    score = 0
-    enemies = []
-    bullets = []
-    enemy_bullets = []
-    main_game()
-
-
-# Quit game
-def quit_game():
-    pygame.quit()
-    sys.exit()
-
 
 # Main game
 def main_game():
@@ -203,13 +156,14 @@ def main_game():
                 enemy_bullets.remove(enemy_bullet)
                 player_hp -= 1
                 if player_hp <= 0:
-                    game_over_menu()
+                    quit()
+                    break
 
         # Remove enemies that are off the screen
         enemies = [enemy for enemy in enemies if enemy["y"] < screen_height]
 
-        # Fill the screen with black
-        screen.fill(BLACK)
+        # Draw background image
+        screen.blit(background_image, (0, 0))
 
         # Draw the player
         screen.blit(player_sprite, (player_x, player_y))
