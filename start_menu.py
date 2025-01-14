@@ -1,4 +1,5 @@
 import pygame
+import os
 
 pygame.init()
 
@@ -20,9 +21,8 @@ class Button:
     def is_clicked(self, pos):
         return self.rect.collidepoint(pos)
 
-button = Button(300, 250, 200, 50, (255, 0, 0), "Click Me")
-
-button = Button(300, 250, 200, 50, (255, 0, 0), "Quit")
+button = Button(300, 250, 200, 50, (255, 0, 0), "Run game")
+button1 = Button(300, 325, 200, 50, (255, 0, 0), "Quit")
 
 running = True
 while running:
@@ -31,10 +31,17 @@ while running:
             running = False
         if event.type == pygame.MOUSEBUTTONDOWN:
             if button.is_clicked(event.pos):
-                print("Button clicked!")
+                print("Run Game button clicked!")
+                os.system('python3 test.py')  # Запуск другого скрипта
+                running = False # Завершение текущего приложения
+                print("Exiting...")
+
+            if button1.is_clicked(event.pos):  # Проверка для кнопки Quit
+                running = False
 
     screen.fill((255, 255, 255))
     button.draw(screen)
+    button1.draw(screen)  
     pygame.display.flip()
 
 pygame.quit()
