@@ -2,6 +2,7 @@ from pickle import FALSE
 import pygame
 import sys
 import random
+import os
 
 # Initialize PyGame
 pygame.init()
@@ -156,6 +157,7 @@ def main_game():
                 enemy_bullets.remove(enemy_bullet)
                 player_hp -= 1
                 if player_hp <= 0:
+                    os.system('python3 end_menu.py')
                     quit()
                     break
 
