@@ -1,0 +1,214 @@
+import pygame
+import sys
+import random
+import os
+
+# Инициализация PyGame
+pygame.init()
+
+# Установка размеров окна
+screen_width = 1920
+screen_height = 1080
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("Simple Shooter Game")
+
+# Установка фреймрейта
+clock = pygame.time.Clock()
+
+# Цвета
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+BLACK = (0, 0, 0)
+GRAY = (100, 100, 100)
+
+# Шрифты
+font = pygame.font.SysFont("Arial", 30)
+large_font = pygame.font.SysFont("Arial", 60)
+
+# Настройки игрока
+player_width = 120
+player_height = 140
+player_speed = 14
+player_hp = 1  # Здоровье игрока
+
+# Настройки пуль
+bullet_width = 40
+bullet_height = 80
+bullet_speed = 20
+bullets = []
+
+# Настройки врагов
+enemy_width = 140
+enemy_height = 140
+enemy_speed = 2
+enemies = []
+enemy_bullets = []
+enemy_bullet_width = 40
+enemy_bullet_height = 80
+enemy_bullet_speed = 15
+enemy_min_fire_rate = 1000
+enemy_max_fire_rate = 4000
+
+# Таймер появления врагов
+enemy_timer = 0
+enemy_spawn_time = 2000
+
+# Настройки счета
+score = 0
+
+# Загрузка спрайтов игрока, врагов и пуль
+player_sprite = pygame.image.load('sample_data/images/player_sprite.png')
+enemy_sprite = pygame.image.load('sample_data/images/enemy_sprite.png')
+bullet_sprite = pygame.image.load('sample_data/images/bullet_sprite.png')
+enemy_bullet_sprite = pygame.image.load('sample_data/images/enemy_bullet_sprite.png')
+
+# Загрузка фона
+background_image = pygame.image.load('sample_data/images/background.png')
+background_image = pygame.transform.scale(background_image, (screen_width, screen_height))  # Изменение размера фона
+
+# Изменение размера спрайтов
+player_sprite = pygame.transform.scale(player_sprite, (player_width, player_height))
+enemy_sprite = pygame.transform.scale(enemy_sprite, (enemy_width, enemy_height))
+bullet_sprite = pygame.transform.scale(bullet_sprite, (bullet_width, bullet_height))
+enemy_bullet_sprite = pygame.transform.scale(enemy_bullet_sprite, (enemy_bullet_width, enemy_bullet_height))
+
+
+# Функция для проверки столкновений
+def check_collision(rect1, rect2):
+    return pygame.Rect(rect1).colliderect(pygame.Rect(rect2))
+
+
+class Game:
+    def __init__(self):
+        # Инициализация состояния игры
+        self.state = {
+            "player": {
+                "x": screen_width // 2 - player_width // 2,
+                "y": screen_height - player_height - 10,
+                "hp": player_hp,
+            },
+            "bullets": [],
+            "enemies": [],
+            "enemy_bullets": [],
+            "score": 0,
+            "enemy_timer": 0,
+        }
+
+    def update(self):
+        # Обновление состояния игры
+        current_time = pygame.time.get_ticks()
+        
+        # Логика для обновления пуль и врагов
+        for bullet in self.state["bullets"]:
+            bullet[1] -= bullet_speed
+        self.state["bullets"] = [bullet for bullet in self.state["bullets"] if bullet[1] > 0]
+        
+        if current_time - self.state["enemy_timer"] > enemy_spawn_time:
+            enemy_x = random.randint(0, screen_width - enemy_width)
+            enemy_y = -enemy_height
+            self.state["enemies"].append({
+                "x": enemy_x,
+                "y": enemy_y,
+                "hp": 1,
+                "last_shot": current_time,
+                "fire_rate": random.randint(enemy_min_fire_rate, enemy_max_fire_rate),
+            })
+            self.state["enemy_timer"] = current_time
+
+        for enemy in self.state["enemies"]:
+            enemy["y"] += enemy_speed
+            if current_time - enemy["last_shot"] > enemy["fire_rate"]:
+                enemy_bullet_x = enemy["x"] + enemy_width // 2 - enemy_bullet_width // 2
+                enemy_bullet_y = enemy["y"] + enemy_height
+                self.state["enemy_bullets"].append([enemy_bullet_x, enemy_bullet_y])
+                enemy["last_shot"] = current_time
+                enemy["fire_rate"] = random.randint(enemy_min_fire_rate, enemy_max_fire_rate)
+
+        # Обновление пуль врагов
+        for enemy_bullet in self.state["enemy_bullets"]:
+            enemy_bullet[1] += enemy_bullet_speed
+        self.state["enemy_bullets"] = [bullet for bullet in self.state["enemy_bullets"] if bullet[1] < screen_height]
+
+def render(self):
+    screen.fill(WHITE)  # Заполняем экран белым
+
+    # Прямоугольник вместо фона
+    pygame.draw.rect(screen, (0, 0, 0), (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    # Отображение игрока как прямоугольника
+    pygame.draw.rect(screen, (255, 0, 0), (self.state["player"]["x"], self.state["player"]["y"], player_width, player_height))
+
+    # Отображение пуль
+    for bullet in self.state["bullets"]:
+        pygame.draw.rect(screen, (0, 255, 0), (bullet[0], bullet[1], bullet_width, bullet_height))
+
+    # Отображение врагов
+    for enemy in self.state["enemies"]:
+        pygame.draw.rect(screen, (0, 0, 255), (enemy["x"], enemy["y"], enemy_width, enemy_height))
+
+    # Отображение пуль врагов
+    for enemy_bullet in self.state["enemy_bullets"]:
+        pygame.draw.rect(screen, (255, 255, 0), (enemy_bullet[0], enemy_bullet[1], enemy_bullet_width, enemy_bullet_height))
+
+    # Отображение счета
+    score_text = font.render(f"Score: {self.state['score']}", True, WHITE)
+    screen.blit(score_text, (10, 10))
+
+    # Отображение здоровья
+    hp_text = font.render(f"HP: {self.state['player']['hp']}", True, RED)
+    screen.blit(hp_text, (10, 50))
+
+    pygame.display.flip()  # Обновление экрана
+
+
+    def handle_input(self):
+        # Обработка ввода пользователя
+        keys = pygame.key.get_pressed()
+        player = self.state["player"]
+
+        if keys[pygame.K_LEFT] and player["x"] > 0:
+            player["x"] -= player_speed
+        if keys[pygame.K_RIGHT] and player["x"] < screen_width - player_width:
+            player["x"] += player_speed
+        if keys[pygame.K_SPACE]:
+            bullet_x = player["x"] + player_width // 2 - bullet_width // 2
+            bullet_y = player["y"]
+            self.state["bullets"].append([bullet_x, bullet_y])
+
+    def check_collisions(self):
+        # Проверка столкновений пуль игрока с врагами
+        for bullet in self.state["bullets"][:]:
+            for enemy in self.state["enemies"][:]:
+                if check_collision((bullet[0], bullet[1], bullet_width, bullet_height),
+                                   (enemy["x"], enemy["y"], enemy_width, enemy_height)):
+                    self.state["bullets"].remove(bullet)
+                    enemy["hp"] -= 1
+                    if enemy["hp"] <= 0:
+                        self.state["enemies"].remove(enemy)
+                        self.state["score"] += 10
+                    break
+
+        # Проверка столкновений пуль врагов с игроком
+        for enemy_bullet in self.state["enemy_bullets"][:]:
+            if check_collision((enemy_bullet[0], enemy_bullet[1], enemy_bullet_width, enemy_bullet_height),
+                               (self.state["player"]["x"], self.state["player"]["y"], player_width, player_height)):
+                self.state["enemy_bullets"].remove(enemy_bullet)
+                self.state["player"]["hp"] -= 1
+                if self.state["player"]["hp"] <= 0:
+                    os.system('python3 end_menu.py')
+                    pygame.quit()
+                    sys.exit()
+
+    def run(self):
+        # Основной игровой цикл
+        while True:
+            self.handle_input()
+            self.update()
+            self.check_collisions()
+            self.render()
+            clock.tick(60)
+
+
+# Запуск игры
+game = Game()
+game.run()
